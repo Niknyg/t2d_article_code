@@ -1,0 +1,942 @@
+---
+title: "t2d_analyses"
+output: html_document
+date: "2023-11-14"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(prodlim)
+library(survival)
+library(survminer)
+library(timereg)
+library(mets)
+
+load("E:/workdata/707957/ID-NN/Results/t2d_df1.rdata")
+```
+# First analysis - checking the association between highest registered level of caries/gingivitis and hazard of T2D
+
+##Checking PH assumptions - FEMALES
+
+```{r}
+
+females <- scor %>% 
+  filter(koen ==2)
+
+#Schoenfeld residuals
+fit <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=females)
+test.ph <- cox.zph(fit)
+ggcoxzph(test.ph) #all variables (save edu which is time varying, have all categories lying well within the SE lines, and follows the linear spline nicely)
+
+#DMFT.CAT
+cox <- phreg(Surv(tstart, tstop, status==2)~dmft.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) # p = 0
+
+out=survfit(Surv(tstart, tstop, status==2)~dmft.cat, data=females)
+kmplot(out, fun="cumhaz", lty=1) 
+#cumulative hazard -  #curves 0-1 and 3-4 overlap quite a lot, good separation of curves after age 40 though. Do landmark analysis, perhaps before and after age 40 could be interesting. Could merge data to smaller categories for less overlap - overlap before age 40 indication of protective effect of oestrogen?
+
+out <- mets::phreg(Surv(tstart, tstop, status==2)~strata(dmft.cat), data=females)
+plot(out, log="y", se=1) #alternative to above plot of cumulative hazards
+
+ggsurvplot(out, fun = "cloglog") #again quite some overlapping/lack of proportionality
+
+#tried combining some of the categories, does get better, though at the loss of some information. Good separation of curves from 35 and to the the end of the follow-up.
+#With alternative categorisation (see code under males) still doesn't live up to ph-assumption, but does have a lot less overlap, with overlap mainly happening before age 30.
+
+#Gingi.cat
+
+cox <- phreg(Surv(tstart, tstop, status==2)~gingi.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) # p = 0.625
+
+out=survfit(Surv(tstart, tstop, status==2)~gingi.cat, data=females)
+kmplot(out, fun="cumhaz", lty=1) 
+
+out <- mets::phreg(Surv(tstart, tstop, status==2)~strata(gingi.cat), data=females)
+plot(out, log="y", se=1) #curve for gingi.cat=3 clearly cuts across all the other curves, so strange that it should be considered to live up to the ph assumption by the above test.
+
+ggsurvplot(out, fun = "cloglog") #again severe cross-over.
+
+out <- mets::phreg(Surv(tstart, tstop, status==2)~strata(gingi.cat), data=females)
+plot(out, log="y", se=1) #see above 
+
+#checked if combining category 0 and 1 would change anything, but it didn't. Again landmark analysis is probably better, again try before/after e.g. age 40.
+
+#Education
+#obviously doesn't live up to ph-assumption as it is time varying
+```
+
+##Checking PH assumptions - MALES
+
+```{r}
+
+males <- scor %>% 
+  filter(koen ==1)
+
+#Schoenfeld residuals
+fit <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=males)
+test.ph <- cox.zph(fit)
+ggcoxzph(test.ph) #all variables (save edu which is time varying, have all categories lying well within the SE lines, and follows the linear spline nicely)
+
+#DMFT.CAT
+cox <- phreg(Surv(tstart, tstop, status==2)~dmft.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) # p = 0.051
+
+out=survfit(Surv(tstart, tstop, status==2)~dmft.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) #curves 0-1 and 2-3 overlap quite a bit also towards the end of follow-up - def. consider merging these.
+
+#New categorization DMFT
+
+scor$dmft.cat[scor$dmft >= 0 & scor$dmft <=4] <- 0
+scor$dmft.cat[scor$dmft >= 5 & scor$dmft <=12] <- 1
+scor$dmft.cat[scor$dmft >=13 & scor$dmft <=16] <- 2
+scor$dmft.cat[scor$dmft >=17] <- 3
+
+cox <- phreg(Surv(tstart, tstop, status==2)~dmft.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) # p = 0.145
+
+out <- mets::phreg(Surv(tstart, tstop, status==2)~strata(dmft.cat), data=males)
+plot(out, log="y", se=1) #alternative to above plot of cumulative hazards. Looks a lot better with new categorisation ~ still see some overlap of some of the curves before age 40 though. Again landmark analysis perhaps more ideal. 
+
+ggsurvplot(out, fun = "cloglog") #see above
+
+
+#Gingi.cat
+
+cox <- phreg(Surv(tstart, tstop, status==2)~gingi.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) # p = 0.095
+
+out=survfit(Surv(tstart, tstop, status==2)~gingi.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) #curves 0 and 1 severely overlapping, worth merging categories 0 and 1. 
+
+
+scor$gingi.cat[scor$gingivitis >= 0 & scor$gingivitis <=4] <- 0
+scor$gingi.cat[scor$gingivitis >= 5 & scor$gingivitis <=8] <- 1
+scor$gingi.cat[scor$gingivitis >=9 & scor$gingivitis <=12] <- 2
+
+cox <- phreg(Surv(tstart, tstop, status==2)~gingi.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.292
+
+out <- mets::phreg(Surv(tstart, tstop, status==2)~strata(gingi.cat), data=males)
+plot(out, log="y", se=1) #curve for gingi.cat=3 clearly cuts across all the other curves, so strange that it should be considered to live up to the ph assumption by the above test ~do landmark analysis, before/after 30 could do.
+
+ggsurvplot(out, fun = "cloglog") #again severe cross-over of curve for category 3.
+
+
+#Education
+# again obviously doesn't live up to ph-assumption as it is time varying
+```
+
+#Analyses setup
+
+```{r}
+
+#New categorization DMFT and gingivtis
+
+scor$dmft.cat[scor$dmft >= 0 & scor$dmft <=4] <- 0
+scor$dmft.cat[scor$dmft >= 5 & scor$dmft <=12] <- 1
+scor$dmft.cat[scor$dmft >=13 & scor$dmft <=16] <- 2
+scor$dmft.cat[scor$dmft >=17] <- 3
+
+scor$gingi.cat[scor$gingivitis >= 0 & scor$gingivitis <=4] <- 0
+scor$gingi.cat[scor$gingivitis >= 5 & scor$gingivitis <=8] <- 1
+scor$gingi.cat[scor$gingivitis >=9 & scor$gingivitis <=12] <- 2
+
+#Making combined caries-gingi variable
+
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 0] <- 0
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 1] <- 1
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 2] <- 2
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 0] <- 3
+scor$comb[scor$dmft.cat == 2 & scor$gingi.cat == 0] <- 4
+scor$comb[scor$dmft.cat == 3 & scor$gingi.cat == 0] <- 5
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 1] <- 6
+scor$comb[scor$dmft.cat == 2 & scor$gingi.cat == 1] <- 7
+scor$comb[scor$dmft.cat == 3 & scor$gingi.cat == 1] <- 8
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 2] <- 9
+scor$comb[scor$dmft.cat == 2 & scor$gingi.cat == 2] <- 10
+scor$comb[scor$dmft.cat == 3 & scor$gingi.cat == 2] <- 11
+
+females <- scor %>% 
+  filter(koen==2)
+
+males <- scor %>% 
+  filter(koen==1)
+```
+#ANALYSES - LEVELS - FEMALES
+
+```{r}
+
+females$dmft.cat <- as.factor(females$dmft.cat)
+
+females$dmft.cat <- relevel(females$dmft.cat, ref ="0")
+
+#CARIES
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat, data=females))
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+edu, data=females))
+
+#GINGI
+
+females$gingi.cat <- as.factor(females$gingi.cat)
+
+females$gingi.cat <- relevel(females$gingi.cat, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi.cat, data=females))
+
+fita <- coxph(Surv(tstart, tstop, status==2)~gingi.cat+edu, data=females)
+
+#CARIES + GINGI
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat, data=females)
+
+lmtest::lrtest(fita, fit1) #p > 0.01 so we reject the hypothesis that the simple model (fita) without dmft the data as well as the one without
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=females)
+
+lmtest::lrtest(fit1, fit2)  #p > 0.01 so we reject the hypothesis that the simple model without adjust for edu describes the data as well as the one without.
+
+fit3 <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+gingi.cat*dmft.cat+edu, data=females)
+
+#No stat.sig. interactions.
+
+lmtest::lrtest(fit2, fit3) #p = 0.461, thus we accept hypothesis that simple model describes data as well as the full model with interaction.
+```
+
+#ANALYSES - LEVELS - MALES
+
+```{r}
+
+males$dmft.cat <- as.factor(males$dmft.cat)
+males$dmft.cat <- relevel(males$dmft.cat, ref ="0")
+
+#CARIES
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+edu, data=males))
+
+#GINGI
+
+males$gingi.cat <- as.factor(males$gingi.cat)
+males$gingi.cat <- relevel(males$gingi.cat, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi.cat, data=males))
+
+fita <- coxph(Surv(tstart, tstop, status==2)~gingi.cat+edu, data=males)
+
+#CARIES + GINGI
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat, data=males)
+lmtest::lrtest(fita, fit1) #p > 0.01 so we reject the hypothesis that the simple model (fita) without dmft the data as well as the one without
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=males)
+
+lmtest::lrtest(fit1, fit2)  #p > 0.01 so we reject the hypothesis that the simple model without adjust for edu describes the data as well as the one without.
+
+fit3 <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+gingi.cat*dmft.cat+edu, data=males)
+
+#No stat.sig. interactions.
+
+lmtest::lrtest(fit2, fit3) #p = 0.844, thus we accept hypothesis that simple model describes data as well as the full model with interaction.
+````
+
+# Landmark analysis using full model, before/after age 40
+
+```{r}
+
+males40 <- subset(males, tstop<40)
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat, data=males40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=males40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+dmft.cat*gingi.cat+edu, data=males40))
+#No stat.sig interactions
+
+males40 <- subset(males, tstop>=40)
+males40$tstart <- 39.999
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat, data=males40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=males40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+dmft.cat*gingi.cat, data=males40))
+#still no interactions
+
+#Before age 40
+females40 <- subset(females, tstop<40)
+
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat, data=females40))
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=females40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+dmft.cat*gingi.cat, data=females40))
+
+fita <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat++edu, data=females40)
+fitb <- coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+dmft.cat*gingi.cat+edu, data=females40)
+lmtest::lrtest(fita, fitb) #p = 0.034 thus we accept that the bigger model is a better fit than the smaller model (we reject the hypothesis that the simple model is a better fit.
+
+#Testing goodness of fit of chosen model:
+cox1 <- phreg(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+dmft.cat*gingi.cat+edu, data=females40)
+gof1 <- gof(cox1)
+par(mfrow=c(2,3));
+plot(gof1)
+
+#After age 40
+females40 <- subset(females, tstop>=40)
+females40$tstart <- 39.999
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat, data=females40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=females40))
+
+summary(coxph(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+dmft.cat*gingi.cat+edu, data=females40))
+#No stat.sig. ineractions
+
+#Testing goodness of fit of chosen model:
+cox1 <- phreg(Surv(tstart, tstop, status==2)~dmft.cat+gingi.cat+edu, data=females40)
+gof1 <- gof(cox1)
+par(mfrow=c(2,3));
+plot(gof1)
+```
+#Age at disease - FEMALES
+
+```{r}
+
+#Age at DMFT
+
+#First assess functional form
+
+females <- transform(females, age2 = ageatdmft^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~ageatdmft+age2+edu, data=females)) #the p-value for load2 is not stat.sig, provides evidence against assumption of linearity
+
+#Quite a few zeros in cariesload, issue if we want to logtransform, therefore +1 for whole variable, then transform so:
+females <- females %>% mutate(ageatdmft = ageatdmft+1)
+females <- transform(females, logage = log2(ageatdmft))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~ageatdmft+logage+edu, data=females) #logage certainly doesn't look to have better linearity
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~ageatdmft+edu, data = females)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~logage+edu, data = females)
+summary(check2)
+#neither ageatdmft nor logage are stat.sig. (p > 0.05), so using log age wouldn't change anything
+plot(check, type="z")
+plot(check2, type="z") #similar fit, both decent, might as well use regular age variable.
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~ageatdmft+edu, data=females)
+fit2 <- coxph(Surv(tstart, tstop, status==2)~ageatdmft+logage+edu, data=females)
+lmtest::lrtest(fit1, fit2)  #p=0.838 thus accept h0 that simple model describes data fine
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatdmft, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatdmft+edu, data=females))
+
+#Try as factor with 18 as reference level
+
+females$ageatdmft <- as.factor(females$ageatdmft)
+
+females$ageatdmft <- relevel(females$ageatdmft, ref ="18")
+
+out=survfit(Surv(tstart, tstop, status==2)~ageatdmft, data=females)
+kmplot(out, fun="cumhaz", lty=1) 
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroup+edu, data=females))
+
+#Try grouping
+
+females$agegroupd[females$ageatdmft >= 0 & females$ageatdmft <6] <- 0
+females$agegroupd[females$ageatdmft >= 6 & females$ageatdmft <12] <- 1
+females$agegroupd[females$ageatdmft >= 12] <- 2
+
+out=survfit(Surv(tstart, tstop, status==2)~agegroup, data=females)
+kmplot(out, fun="cumhaz", lty=1)  #meget store overlap næsten hele vejen igennem, ph antagelse ikke mødt.
+
+females$agegroup[females$ageatdmft >= 0 & females$ageatdmft <12] <- 0
+females$agegroup[females$ageatdmft >= 12] <- 1 #still too close with too much overlap
+#use as continuous covariate, grouping doesn't seem to make sense here.
+
+cox <- phreg(Surv(tstart, tstop, status==2)~agegroup, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.964
+
+#Age at GINGI
+
+#First assess functional form
+
+females <- transform(females, age2 = ageatgingi^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~ageatgingi+age2+edu, data=females)) #the p-value for load2 is stat.sig  (p=0.016), provides evidence against assumption of linearity
+
+#Quite a few zeros in cariesload, issue if we want to logtransform, therefore +1 for whole variable, then transform so:
+females <- females %>% mutate(ageatgingi = ageatgingi+1)
+females <- transform(females, logage = log2(ageatgingi))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~ageatgingi+logage+edu, data=females) #logage  doesn't look to have better linearity..
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~ageatgingi+edu, data = females)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~logage+edu, data = females)
+summary(check2)
+#logage are stat.sig. (p = 0.047), so using log age could be relevant
+plot(check, type="z")
+plot(check2, type="z") #similar fit, both decent, might as well use regular age variable?
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~ageatgingi+edu, data=females)
+fit2 <- coxph(Surv(tstart, tstop, status==2)~ageatgingi+logage+edu, data=females)
+lmtest::lrtest(fit1, fit2)  #p=0.0.07 thus accept h0 that simple model describes data fine
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatgingi, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatgingi+edu, data=females))
+
+#Try grouping
+
+females$agegroupg[females$ageatgingi >= 0 & females$ageatgingi <6] <- 0
+females$agegroupg[females$ageatgingi >= 6 & females$ageatgingi <12] <- 1
+females$agegroupg[females$ageatgingi >= 12] <- 2
+
+
+out=survfit(Surv(tstart, tstop, status==2)~agegroup, data=females)
+kmplot(out, fun="cumhaz", lty=1)
+
+females$agegroup[females$ageatgingi >= 0 & females$ageatgingi <12] <- 0
+females$agegroup[females$ageatgingi >= 12] <- 1 #slight overlap beginning of curve, but nothing of importance I'd say.
+
+cox <- phreg(Surv(tstart, tstop, status==2)~agegroup, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.961/p=0.677 - both three and two groups okay according to test
+par(mfrow=c(2,3));
+plot(gofcox)
+
+females$agegroupd <- as.factor(females$agegroupd)
+
+females$agegroupd <- relevel(females$agegroupd, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupd+edu, data=females))
+
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~agegroup+ageatdmft+edu, data=females)
+#               coef exp(coef)  se(coef)       z Pr(>|z|)    
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~agegroup+ageatdmft+agegroup*ageatdmft+edu, data=females)
+
+lmtest::lrtest(fit1, fit2)  #p=0.0.07 thus accept h0 that simple model w/o interaction describes data fine
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupd+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupg+edu, data=females))
+
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupd+agegroupg+edu, data=females))
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~agegroupd+agegroupg+edu, data=females)
+fit1 <- coxph(Surv(tstart, tstop, status==2)~agegroupg+edu, data=females)
+         
+lmtest::lrtest(fit1, fit2)  #p=0.0.74 thus accept h0 that simple model describes data fine.
+```
+
+#Age at disease - MALES
+
+```{r}
+
+#Age at DMFT
+
+#First assess functional form
+
+males <- transform(males, age2 = ageatdmft^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~ageatdmft+age2+edu, data=males)) #the p-value for load2 is not stat.sig, provides evidence against assumption of linearity
+
+#Quite a few zeros in cariesload, issue if we want to logtransform, therefore +1 for whole variable, then transform so:
+males <- males %>% mutate(ageatdmft = ageatdmft+1)
+males <- transform(males, logage = log2(ageatdmft))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~ageatdmft+logage+edu, data=males) #logage certainly doesn't look to have better linearity, ageatdmft also bad, consider grouping
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~ageatdmft+edu, data = males)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~logage+edu, data = males)
+summary(check2)
+#both ageatdmft and logage are are marginally stat.sig. (p > 0.05), indication using log age might work might not
+plot(check, type="z")
+plot(check2, type="z") #logage does seem to fit model better
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~ageatdmft+edu, data=males)
+fit2 <- coxph(Surv(tstart, tstop, status==2)~ageatdmft+logage+edu, data=males)
+lmtest::lrtest(fit1, fit2)  #p=0.719 thus accept h0 that simple model describes data fine (neither variable in either model is stat.sig)
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatdmft, data=males))
+
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatdmft+edu, data=males))
+
+#Try grouping
+
+males$agegroupd[males$ageatdmft >= 0 & males$ageatdmft <6] <- 0
+males$agegroupd[males$ageatdmft >= 6 & males$ageatdmft <12] <- 1
+males$agegroupd[males$ageatdmft >= 12] <- 2
+
+out=survfit(Surv(tstart, tstop, status==2)~agegroup, data=males)
+kmplot(out, fun="cumhaz", lty=1)  #curve for group 1 above the two others, other two overlap a lot, try grouping and see if it improves
+
+#but:
+cox <- phreg(Surv(tstart, tstop, status==2)~agegroup, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.567/0.34 for three and two groups respectively
+
+males$agegroup[males$ageatdmft >= 0 & males$ageatdmft <12] <- 0
+males$agegroup[males$ageatdmft >= 12] <- 1 #somewhat improved, some overlap up until age 34, consider landmarking or time interaction - but then again test is okay in terms of p-value...
+
+#Age at GINGI
+
+#First assess functional form
+
+males <- transform(males, age2 = ageatgingi^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~ageatgingi+age2+edu, data=males)) #the p-value for load2 is stat.sig  (p=0.016), provides evidence against assumption of linearity
+
+#Quite a few zeros in cariesload, issue if we want to logtransform, therefore +1 for whole variable, then transform so:
+males <- males %>% mutate(ageatgingi = ageatgingi+1)
+males <- transform(males, logage = log2(ageatgingi))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~ageatgingi+logage+edu, data=males) #not really sure one is better than the other
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~ageatgingi+edu, data = males)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~logage+edu, data = males)
+summary(check2)
+#both age at logage are stat.sig, so using log age could be relevant
+plot(check, type="z")
+plot(check2, type="z") #find age to look better than logage off the bat
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~ageatgingi+edu, data=males)
+fit2 <- coxph(Surv(tstart, tstop, status==2)~ageatgingi+logage+edu, data=males)
+lmtest::lrtest(fit1, fit2)  #p=0.0.03 thus reject h0 that simple model describes data fine, i.e. use logtransformed variable
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatgingi+logage, data=males))
+
+
+summary(coxph(Surv(tstart, tstop, status==2)~ageatgingi+logage+edu, data=males))
+
+#how to interpret model when both age and logage are present?
+
+#Try grouping
+
+males$agegroupg[males$ageatgingi >= 0 & males$ageatgingi <6] <- 0
+males$agegroupg[males$ageatgingi >= 6 & males$ageatgingi <12] <- 1
+males$agegroupg[males$ageatgingi >= 12] <- 2
+
+out=survfit(Surv(tstart, tstop, status==2)~agegroup, data=males)
+kmplot(out, fun="cumhaz", lty=1) #quite some overlap, group 1 and 3 could be merged
+
+cox <- phreg(Surv(tstart, tstop, status==2)~agegroup, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.51, so PH assumption just about met
+
+males$agegroup[males$ageatgingi >= 0 & males$ageatgingi <12] <- 0
+males$agegroup[males$ageatgingi >= 12] <- 1 #slight overlap beginning of curve, but nothing of importance I'd say.
+
+cox <- phreg(Surv(tstart, tstop, status==2)~agegroup, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.084, so PH assumption definetely met
+
+males$agegroup <- as.factor(males$agegroup)
+
+males$agegroup <- relevel(males$agegroup, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroup+edu, data=males))
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~agegroup+ageatdmft+edu, data=males)
+
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~agegroup+ageatdmft+agegroup*ageatdmft+edu, data=males)
+
+lmtest::lrtest(fit1, fit2)  #p=0.0.07 thus accept h0 that simple model w/o interaction describes data fine
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupd+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupg+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~agegroupd+agegroupg+edu, data=males))
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~agegroupd+agegroupg+edu, data=males)
+fit1 <- coxph(Surv(tstart, tstop, status==2)~agegroupg+edu, data=males)
+         
+lmtest::lrtest(fit1, fit2)  #p=0.0.846 thus accept h0 that simple model is best fit for data.
+
+```
+
+#Severity and duration of caries
+# FEMALES - MODEL CHECKS - Duration and severity of gingivitis analyses
+
+```{r}
+females <- scor %>% filter(koen==2)
+
+#caries - linearity
+
+females <- transform(females, load2 = cariesload^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+load2+edu, data=females)) #the p-value for load2 is not stat.sig, provides evidence against assumption of linearity
+
+#Quite a few zeros in cariesload, issue if we want to logtransform, therefore +1 for whole variable, then transform so:
+females <- females %>% mutate(cariesload = cariesload+1)
+females <- transform(females, log2load = log2(cariesload))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~caries_duration+cariesload+log2load+edu, data=females) #log2load does seem to have somewhat better linearity than cariesload
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~cariesload+caries_duration+edu, data = females)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~log2load+caries_duration+edu, data = females)
+#neither cariesload nor log2load are stat.sig. (p > 0.05), so using log age wouldn't change anything
+
+#Gingivitis - linearity
+
+females <- transform(females, load2 = gingiload^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+load2+edu, data=females)) #the p-value for load2 is marginally stat.sig, provides some evidence for assumption of linearity being met
+
+#Double check:
+females <- females %>% mutate(gingiload = gingiload+1)
+females <- transform(females, log2load = log2(gingiload))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~gingi_duration+gingiload+log2load+edu, data=females) #gingiload certainly looks like a more linear fit 
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+edu, data = females)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~log2load+gingi_duration+edu, data = females)
+summary(check2)
+#Log2load borderline stat.sig. (p = 0.054), so using log age does make a difference 
+plot(check, type="z")
+plot(check2, type="z") #the normal variable (not log transformed) provides better fit.
+
+#ph assumption
+
+females$caries_duration[females$caries_duration >= 0 & females$caries_duration <2] <- 0
+females$caries_duration[females$caries_duration ==2] <- 1
+females$caries_duration[females$caries_duration ==3] <- 2
+                       
+out=survfit(Surv(tstart, tstop, status==2)~caries_duration, data=females)
+kmplot(out, fun="cumhaz", lty=1) #curves for 0 and 1 somewhat overlapping, could be merged, same for males - merge give much better fit for both genders. Do consider landmark analysis at age 40.
+
+
+out=survfit(Surv(tstart, tstop, status==2)~gingi_duration, data=males)
+kmplot(out, fun="cumhaz", lty=1) #curves for gingi 0 and 1 overlapping everything quite a bit, merge with benefit, same for males- much better fit for both genders. Curves 0 and 1 still overlap considerably all through follow-up, consider merging for females. For males look ok, consider landmark at age 40 for more accurate results..
+
+fit <- phreg(Surv(tstart, tstop, status==2)~gingi_duration, data = females)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) #good model fit, and ph assumption met by gingi_duration
+
+
+fit <- phreg(Surv(tstart, tstop, status==2)~gingiload, data = females)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) #decent model fit and ph assumption met (p = 0.305)
+
+fit <- phreg(Surv(tstart, tstop, status==2)~caries_duration, data = females)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) # p=0.281, ph assumption met, decent model fit
+
+fit <- phreg(Surv(tstart, tstop, status==2)~cariesload, data = females)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) # decent model fit, at p=0.331 thus ph assumption met.
+```
+
+FEMALES - BUILDING MODELS
+
+```{r}
+#CARIES
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~caries_duration, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~caries_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+caries_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+caries_duration+cariesload*caries_duration+edu, data=females)) #no stat.sig interactoins
+
+#GINGIVITIS
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload, data=females))
+
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi_duration, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+gingiload*gingi_duration+edu, data=females)) #no stat.sig interactoins, only gingi duration and edu stat.sig.
+
+
+#Caries + gingi
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+cariesload+caries_duration, data=females)) #no difference when not adjusting for edu in terms of significance, only minor difference in HR estimates
+
+#so to conclude no significant effects of neither duration nor severity over time of caries, but duration and severity of gingivitis increases HR of T2D in adulthood.
+```
+
+# MALES - MODEL CHECKS - Duration and severity of gingivitis analyses
+
+```{r}
+males <- scor %>% filter(koen==1)
+
+#caries - linearity
+
+males <- transform(males, load2 = cariesload^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+load2+edu, data=males)) #the p-value for load2 is not stat.sig, provides evidence against assumption of linearity
+
+#Quite a few zeros in cariesload, issue if we want to logtransform, therefore +1 for whole variable, then transform so:
+males <- males %>% mutate(cariesload = cariesload+1)
+males <- transform(males, log2load = log2(cariesload))
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~caries_duration+cariesload+log2load+edu, data=males) #cariesload  seem to have somewhat better linearity than log2load
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~cariesload+caries_duration+edu, data = males)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~log2load+caries_duration+edu, data = males)
+summary(check2)
+#neither cariesload nor log2load are stat.sig. (p > 0.05), so using log age wouldn't change anything
+
+#Gingivitis - linearity
+
+males <- transform(males, load2 = gingiload^2)#creating squared cariesload variable
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+load2+edu, data=males)) #the p-value for load2 is not stat.sig, indication that assumption of linearity is met
+
+#Double check:
+males <- males %>% mutate(gingiload = gingiload+1)
+males <- transform(males, log2load = log2(gingiload))
+
+
+#Plotting martingale residuals
+ggcoxfunctional(Surv(tstart, tstop, status==2)~gingi_duration+gingiload+log2load+edu, data=males) #gingiload certainly looks like a more linear fit 
+
+#Cumulative residuals vs. modelmatrix
+check <- gofZ.phreg(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+edu, data = males)
+summary(check)
+check2 <- gofZ.phreg(Surv(tstart, tstop, status==2)~log2load+gingi_duration+edu, data = males)
+summary(check2)
+#Gingiload borderline stat.sig. (p = 0.052), so using log age does not make a difference 
+plot(check, type="z")
+plot(check2, type="z") #the normal variable (not log transformed) provides better fit.
+
+summary(coxph(Surv(tstart, tstop, status==2)~log2load+gingiload+gingi_duration+edu, data = males))
+#Confirmed, only gingiload stat.sig in model, so go with gingiload.
+
+#ph assumption
+
+fit <- phreg(Surv(tstart, tstop, status==2)~gingi_duration, data = males)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) #fine model fit, and ph assumption met by gingi_duration, p =.079
+
+
+fit <- phreg(Surv(tstart, tstop, status==2)~gingiload, data = males)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) #decent model fit and ph assumption met (p = 0.625)
+
+fit <- phreg(Surv(tstart, tstop, status==2)~caries_duration, data = males)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) # p=0.808, ph assumption met, ok model fit
+
+fit <- phreg(Surv(tstart, tstop, status==2)~cariesload, data = males)
+gof1 <- gof(fit)
+par(mfrow=c(2,3));
+plot(gof1);
+summary(gof1) # fine model fit, at p=0.11 thus ph assumption met.
+
+```
+
+MALES - BUILDING MODELS
+
+```{r}
+#CARIES
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~caries_duration, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~caries_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+caries_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+caries_duration+cariesload*caries_duration+edu, data=males)) #no stat.sig interactions
+
+#GINGIVITIS
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi_duration, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+gingiload*gingi_duration+edu, data=males)) #no stat.sig interactoins, only gingi duration and edu stat.sig.
+
+
+#Caries + gingi
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+cariesload+caries_duration+edu, data=males)) #no difference when not adjusting for edu in terms of significance, only minor difference in HR estimates
+
+#so to conclude load of caries and gingivitis appear to have some effect for males (significant and borderline significant). Gingivitis again come out as the most influential factor. Duration of gingivitis only significant untill we take into account the load, at which point the effect of duration disappears.
+```
+
+#severity and load with levels
+
+```{r}
+#MALES
+
+males$caries_duration <- as.factor(males$caries_duration)
+
+males$caries_duration <- relevel(males$caries_duration, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~caries_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+cariesload+caries_duration+edu, data=males))
+
+#FEMALES
+
+summary(coxph(Surv(tstart, tstop, status==2)~caries_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingi_duration+edu, data=females))
+
+fit1 <- coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+edu, data=males)
+
+fit2 <- coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+cariesload+caries_duration+edu, data=males)
+         
+lmtest::lrtest(fit1, fit2)  #p=0.0.597 thus accept h0 that simple model is best fit for data for females, p=0.398 for males.
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+caries_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cariesload+caries_duration+edu, data=males))
+```
+
+#Grouping dmft and gingi load
+
+```{r}
+females$gcl[]
+```
+
+
+#Severity caries and gingivitis - LANDMARKING, age 40
+
+```{r}
+#BEFORE AGE 40
+females40 <- subset(females, tstop<40)
+
+summary(coxph(Surv(tstart, tstop, status==2)~gingiload+gingi_duration+cariesload+caries_duration+edu, data=females40))
+
+#AT OR AFTER AGE 40
+females40 <- subset(females, tstop>=40)
+females40$tstart <- 39.999
+```
+#categorised loads analyses
+
+```{r}
+
+#FEMALES
+
+females <- scor %>% 
+  filter(koen ==2)
+
+females$ggroup <- as.factor(females$ggroup)
+
+females$ggroup <- relevel(females$ggroup, ref ="0")
+
+females$gingi_duration <- as.factor(females$gingi_duration)
+
+females$gingi_duration <- relevel(females$gingi_duration, ref ="0")
+
+females$cgroup <- as.factor(females$cgroup)
+
+females$cgroup <- relevel(females$cgroup, ref ="0")
+
+females$caries_duration <- as.factor(females$caries_duration)
+
+females$caries_duration <- relevel(females$caries_duration, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~ggroup+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~ggroup+gingi_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cgroup+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cgroup+caries_duration+edu, data=females))
+
+summary(coxph(Surv(tstart, tstop, status==2)~ggroup+gingi_duration+cgroup+caries_duration+edu, data=females))
+
+
+#MALES
+
+males <- scor %>% 
+  filter(koen ==1)
+
+males$ggroup <- as.factor(males$ggroup)
+
+males$ggroup <- relevel(males$ggroup, ref ="0")
+
+males$gingi_duration <- as.factor(males$gingi_duration)
+
+males$gingi_duration <- relevel(males$gingi_duration, ref ="0")
+
+males$cgroup <- as.factor(males$cgroup)
+
+males$cgroup <- relevel(males$cgroup, ref ="0")
+
+males$caries_duration <- as.factor(males$caries_duration)
+
+males$caries_duration <- relevel(males$caries_duration, ref ="0")
+
+summary(coxph(Surv(tstart, tstop, status==2)~ggroup+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~ggroup+gingi_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cgroup+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~cgroup+caries_duration+edu, data=males))
+
+summary(coxph(Surv(tstart, tstop, status==2)~ggroup+gingi_duration+cgroup+caries_duration+edu, data=males))
+
+```
+

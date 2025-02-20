@@ -1,0 +1,59 @@
+---
+title: "Status_setup_diabetes"
+author: "NN"
+date: "2024-01-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Censoring data by type 1 diabetes, death, immigration (lost to follow-up), or not experiencing event (diabetes) before end of follow-up.
+
+Not censored = 0, Censored due to T1D or Death = 1, Event (T2D) = 2. 
+
+All individuals with codes 20, 30, 50 and 60 in the CPR registry, denoting somehow faulty entries, to be removed from the dataset.
+
+The df dod2020 is incomplete compared to the t_person file in terms of date of death (6063 NA's), thus will just use t_person for info on date of death.
+
+In terms of cause of death the number of entries do not correspond with the number of individuals who have died. File dodaarsaag_1 spans 1970-2001, while file _2 spans 2002-2018 
+```{r}
+
+load("E:/workdata/707957/_DataIn/R/Basic/kronikere.rdata")
+load("E:/workdata/707957/_DataIn/R/Basic/t_person.rdata")
+
+#Coding status variable + outdate for event T2D
+kronikere$status[kronikere$sygdom == "TYPE 2"] <- 2
+kronikere$status[kronikere$sygdom == "TYPE 1"] <- 3
+kronikere <- kronikere %>% 
+  rename(outdate = debut) %>% 
+   select(pnr,
+         status,
+         outdate)
+#A total of 17590 individuals with T1D, 38607 with T2D.
+
+#Coding censoring variable from death/emigration
+t_person <- t_person %>%
+  filter(C_STATUS < 10 | C_STATUS >= 70) %>% 
+  mutate(status = ifelse(C_STATUS == 90, 1,0)) %>% 
+  rename(outdate = D_STATUS_HEN_START,
+         pnr = v_pnr) %>% 
+  select(pnr,
+         status,
+         outdate)
+
+#55978 appear to have died, while 2906949 have survived (or emigrated)
+  
+#Gathering into status/outage df 
+dfstat <- rbind(t_person, kronikere) %>%
+  group_by(pnr) %>% 
+  slice(which.max(status))
+
+#Making all outdate = NA into 31.12.2018
+eof <- as.Date("2018-12-31")
+dfstat$outdate[is.na(dfstat$outdate)] <- eof
+
+rm(kronikere, t_person)
+
+save(dfstat, file="E:\\workdata\\707957\\ID-NN\\Results\\status.rdata")

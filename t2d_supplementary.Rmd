@@ -1,0 +1,234 @@
+---
+title: "t2d_supplementary"
+author: "NN"
+date: "2024-11-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#load packages
+library(tidyverse)
+library(prodlim)
+library(survival)
+library(survminer)
+library(timereg)
+library(mets)
+
+#load dataset
+load("E:/workdata/707957/ID-NN/Results/JoDR_df1.rdata")
+
+#add 1 to all dmft and gingi to avoid 0 for form assessment to work
+scor <- scor %>% 
+  group_by(pnr) %>% 
+  mutate(dmft = sum(dmft+1),
+         gingi = sum(gingivitis+1))
+ 
+females <- scor %>% 
+  filter(koen==2)
+
+males <- scor %>% 
+  filter(koen==1)
+```
+
+## Assessing functional form and proportional hazards of continuous variables
+
+```{r}
+
+#Females
+ggcoxfunctional(Surv(inage, outage, status==2)~ dmft + dmft+log(dmft)+sqrt(dmft), data = females) #regular DMFT looks pretty close to linear, go with that.
+
+ggcoxfunctional(Surv(inage, outage, status==2)~ gingi+log(gingi)+sqrt(gingi), data = females) # not quite as linear as dmft, but would still say pretty decent if using regular gingi
+
+#Males
+ggcoxfunctional(Surv(inage, outage, status==2)~ dmft + dmft+log(dmft)+sqrt(dmft), data = males) #again regular DMFT looks gives the best linear fit.
+
+ggcoxfunctional(Surv(inage, outage, status==2)~ gingi + log(gingi)+sqrt(gingi), data = males) # pretty good linear fit for regular gingi
+
+#Proportional hazards
+
+fit <- coxph(Surv(inage, outage, status==2)~dmft+gingi+edustat, data=females)
+test.ph <- cox.zph(fit)
+ggcoxzph(test.ph) #don't see any (strong) systematic departures from the smoothing spline, distribution across time pretty even (thinning at the end)
+
+fit <- coxph(Surv(inage, outage, status==2)~dmft+gingi+edustat, data=males)
+test.ph <- cox.zph(fit)
+ggcoxzph(test.ph) #again don't see any strong systematic departures from the smoothing spline, distribution across time pretty even (thinning at the end)
+
+#Proportional hazards for dmft.cat og gingicat revisited
+#MALES
+out=survfit(Surv(inage, outage, status==2)~gingi.cat, data=males)
+kmplot(out, fun="cloglog", lty=1) #again curves certainly parallel from age 30
+
+out=survfit(Surv(inage, outage, status==2)~dmft.cat, data=males)
+kmplot(out, fun="cloglog", lty=1) #curves parallel from age 40
+
+#FEMALES
+out=survfit(Surv(inage, outage, status==2)~gingi.cat, data=females)
+kmplot(out, fun="cloglog", lty=1) #would say curves are parallel from age 30
+
+
+out=survfit(Surv(inage, outage, status==2)~dmft.cat, data=females)
+kmplot(out, fun="cloglog", lty=1) #again curves certainly parallel from age 40
+```
+
+## Running models for continuous variables
+
+```{r}
+summary(coxph(Surv(inage, outage, status==2)~dmft+strata(edustat), data=females))
+         coef exp(coef) se(coef)    z Pr(>|z|)    
+dmft 0.016187  1.016318 0.002781 5.82 5.87e-09 ***
+     exp(coef) exp(-coef) lower .95 upper .95
+dmft     1.016     0.9839     1.011     1.022
+
+summary(coxph(Surv(inage, outage, status==2)~gingi+strata(edustat), data=females))
+          coef exp(coef) se(coef)     z Pr(>|z|)    
+gingi 0.075794  1.078740 0.005034 15.06   <2e-16 ***
+      exp(coef) exp(-coef) lower .95 upper .95
+gingi     1.079      0.927     1.068     1.089
+
+summary(coxph(Surv(inage, outage, status==2)~dmft + gingi, data=females))
+          coef exp(coef) se(coef)      z Pr(>|z|)    
+dmft  0.019526  1.019718 0.002849  6.852 7.26e-12 ***
+gingi 0.092926  1.097381 0.005224 17.787  < 2e-16 ***
+      exp(coef) exp(-coef) lower .95 upper .95
+dmft      1.020     0.9807     1.014     1.025
+gingi     1.097     0.9113     1.086     1.109
+
+summary(coxph(Surv(inage, outage, status==2)~dmft + gingi+strata(edustat), data=females))
+          coef exp(coef) se(coef)      z Pr(>|z|)    
+          coef exp(coef) se(coef)      z Pr(>|z|)    
+dmft  0.006004  1.006022 0.002869  2.093   0.0364 *  
+gingi 0.073081  1.075818 0.005199 14.058   <2e-16 ***
+      exp(coef) exp(-coef) lower .95 upper .95
+dmft      1.006     0.9940     1.000     1.012
+gingi     1.076     0.9295     1.065     1.087
+
+summary(coxph(Surv(inage, outage, status==2)~dmft +gingi+dmft*gingi+strata(edustat), data=females)) #no interactions found
+
+summary(coxph(Surv(inage, outage, status==2)~dmft+strata(edustat), data=males))
+         coef exp(coef) se(coef)     z Pr(>|z|)    
+dmft 0.010594  1.010651 0.002206 4.801 1.58e-06 ***
+     exp(coef) exp(-coef) lower .95 upper .95
+dmft     1.011     0.9895     1.006     1.015
+
+summary(coxph(Surv(inage, outage, status==2)~gingi+strata(edustat), data=males))
+          coef exp(coef) se(coef)     z Pr(>|z|)    
+gingi 0.065503  1.067696 0.004002 16.37   <2e-16 ***
+      exp(coef) exp(-coef) lower .95 upper .95
+gingi     1.068     0.9366     1.059     1.076
+
+summary(coxph(Surv(inage, outage, status==2)~dmft + gingi, data=males))
+           coef exp(coef) se(coef)      z Pr(>|z|)    
+dmft  0.013489  1.013580 0.002257  5.976 2.29e-09 ***
+gingi 0.081551  1.084969 0.004147 19.666  < 2e-16 ***
+          exp(coef) exp(-coef) lower .95 upper .95
+dmft      1.014     0.9866     1.009     1.018
+gingi     1.085     0.9217     1.076     1.094
+
+summary(coxph(Surv(inage, outage, status==2)~dmft + gingi+strata(edustat), data=males))
+          coef exp(coef) se(coef)      z Pr(>|z|)    
+dmft  0.001638  1.001640 0.002274  0.721    0.471    
+gingi 0.064769  1.066913 0.004130 15.682   <2e-16 ***
+      exp(coef) exp(-coef) lower .95 upper .95
+dmft      1.002     0.9984    0.9972     1.006
+gingi     1.067     0.9373    1.0583     1.076
+
+summary(coxph(Surv(inage, outage, status==2)~dmft +gingi+dmft*gingi+strata(edustat), data=males)) #no interactions found
+
+```
+
+# Cumulative hazard plots 
+
+```{r}
+
+out=survfit(Surv(inage, outage, status==2)~dmft.cat, data=females)
+ggsurvplot(out, fun = "cumhaz", xlim=c(25,56), size=0.05, conf.int="TRUE", legend.labs=c("DCS: Low", "DCS: Moderate", "DCS: High", "DCS: Severe"), xlab ="Age during follow-up", ylab="Cumulative hazard of T2D in females")
+
+out=survfit(Surv(inage, outage, status==2)~gingi.cat, data=females)
+ggsurvplot(out, fun = "cumhaz", xlim=c(25,56), size=0.05, conf.int="TRUE", legend.labs=c("Gingivitis: Low", "Gingivitis: Moderate", "Gingivitis: High"), xlab ="Age during follow-up", ylab="Cumulative hazard of T2D in females")
+
+out=survfit(Surv(inage, outage, status==2)~dmft.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) 
+ggsurvplot(out, fun = "cumhaz", xlim=c(25,56), size=0.05, conf.int="TRUE", legend.labs=c("DCS: Low", "DCS: Moderate", "DCS: High", "DCS: Severe"), xlab ="Age during follow-up", ylab="Cumulative hazard of T2D in males")
+
+out=survfit(Surv(inage, outage, status==2)~gingi.cat, data=males)
+ggsurvplot(out, fun = "cumhaz", xlim=c(25,56), size=0.05, conf.int="TRUE", legend.labs=c("Gingivitis: Low", "Gingivitis: Moderate", "Gingivitis: High"), xlab ="Age during follow-up", ylab="Cumulative hazard of T2D in males")
+
+
+```
+
+#Data visualisation - dmft and gingi
+
+```{r}
+
+#Distribution histograms 
+
+#DMFT - population
+
+df <- as.data.frame(table(scor$koen, scor$dmft.cat)) %>% 
+  rename(Sex = Var1,
+         DMFT = Var2) %>% 
+  mutate(Sex = ifelse(Sex == 1, "Male", "Female"))
+
+ggplot(df, aes (fill=Sex, x=DMFT, y=Freq))+
+  geom_bar(alpha = 0.9, stat="identity", position = "dodge")+
+  xlab("DC") +
+  ylab("Frequency")+
+  theme(plot.title = element_text(hjust=0.5), panel.background = element_blank(), axis.line = element_line(color="black"))
+
+#DMFT - T2D
+df <- scor %>% filter(status==2)
+df <- as.data.frame(table(df$koen, df$dmft.cat)) %>% 
+  rename(Sex = Var1,
+         DMFT = Var2) %>% 
+  mutate(Sex = ifelse(Sex == 1, "Male", "Female"))
+
+ggplot(df, aes (fill=Sex, x=DMFT, y=Freq))+
+  geom_bar(alpha = 0.9, stat="identity", position = "dodge")+
+  xlab("DC") +
+  ylab("Frequency")+
+  theme(plot.title = element_text(hjust=0.5), panel.background = element_blank(), axis.line = element_line(color="black"))
+
+#Gingi - population
+
+df <- as.data.frame(table(scor$koen, scor$gingi.cat)) %>% 
+  rename(Sex = Var1,
+         Gingivitis = Var2) %>% 
+  mutate(Sex = ifelse(Sex == 1, "Male", "Female"))
+
+ggplot(df, aes (fill=Sex, x=Gingivitis, y=Freq))+
+  geom_bar(alpha = 0.9, stat="identity", position = "dodge")+
+  ggtitle("Gingivitis distribution by sex")+
+  xlab("GS") +
+  ylab("Frequency")+
+  theme(plot.title = element_text(hjust=0.5), panel.background = element_blank(), axis.line = element_line(color="black"))
+
+#Alternative
+ggplot(males, aes  (x=dmft.cat))+
+  geom_bar(fill = "lightblue", alpha = 0.9)+
+  ggtitle("DC distribution - Females")+
+  xlab("Dental caries (DMFT)") +
+  ylab("Frequency")+
+  theme(plot.title = element_text(hjust=0.5), panel.background = element_blank(), axis.line = element_line(color="black"))
+
+
+#Jitterplot DC and gingi females:
+ggplot(females, aes  (x=dmft.cat+1, y=gingi.cat+1))+
+  geom_point()+
+  geom_jitter()+
+  scale_x_discrete(name = "DCS", limits=c("Low", "Moderate", "High", "Severe"))+
+  scale_y_discrete(name = "GS", limits=c("Low", "Moderate", "High"))+
+  theme_classic()
+
+#Jitterplot DC and gingi males:
+ggplot(males, aes  (x=dmft.cat+1, y=gingi.cat+1))+
+  geom_point()+
+  geom_jitter()+
+  scale_x_discrete(name = "DCS", limits=c("Low", "Moderate", "High", "Severe"))+
+  scale_y_discrete(name = "GS", limits=c("Low", "Moderate", "High"))+
+  theme_classic()
+    
+   
+
+qqplot(x=females$gingivitis, y=females$dmft) #non-normal distribution
+qqplot(x=males$gingivitis, y=males$dmft) #non-normal distribution

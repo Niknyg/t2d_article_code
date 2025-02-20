@@ -1,0 +1,400 @@
+---
+title: "t2d_variable_asessment"
+author: "NN"
+date: "2024-01-13"
+output: html_document
+---
+
+```{r setup}
+library(tidyverse)
+library(prodlim)
+library(survival)
+library(survminer)
+library(timereg)
+library(mets)
+
+load("E:/workdata/707957/ID-NN/Results/t2d_df1.rdata")
+
+
+males <- scor %>% 
+  filter(koen ==1)
+
+females <- scor %>% 
+  filter(koen ==2)
+```
+
+## Edu single value
+
+```{r}
+
+#FEMALES 
+cox <- phreg(Surv(inage, outage, status==2)~gingi.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.156
+
+cox <- phreg(Surv(inage, outage, status==2)~dmft.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0
+
+cox <- phreg(Surv(inage, outage, status==2)~edustat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.017
+
+cox <- phreg(Surv(inage, outage, status==2)~edustat+dmft.cat+gingi.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) 
+#p
+#edustat    94.66815 0.016
+#dmft.cat  142.87405 0.000
+#gingi.cat  55.52725 0.150
+
+cox <- phreg(Surv(inage, outage, status==2)~comb, data=females)
+gofcox <- gof(cox)
+summary(gofcox)#p = 0
+
+#Schoenfeld residuals
+fit <- coxph(Surv(inage,outage, status==2)~dmft.cat+gingi.cat+edustat, data=females)
+test.ph <- cox.zph(fit)
+#            chisq df      p
+#dmft.cat  11.1942  1 0.00082 #needs work it would seem
+#gingi.cat  0.0226  1 0.88042 #ok
+#edustat    0.6061  1 0.43626 #interesting that ok here but not in previous test
+#GLOBAL    12.0696  3 0.00715
+ggcoxzph(test.ph) #all variables have all categories lying well within the SE lines, and follows the linear spline nicely
+
+out=survfit(Surv(inage, outage, status==2)~dmft.cat, data=females)
+kmplot(out, fun="cumhaz", lty=1) #lines for cat 0 and 1 overlap quite a it untill apx. age 38, otherwise cumulative hazard actually look pretty
+
+out=survfit(Surv(inage, outage, status==2)~gingi.cat, data=females)
+kmplot(out, fun="cumhaz", lty=1) #Tiniest bit of overlap before age 30, otherwise looks fine
+
+out=survfit(Surv(inage, outage, status==2)~edustat, data=females)
+kmplot(out, fun="cumhaz", lty=1) #curves have really nice separation, would not think prop.hazard issue.
+
+fit <- coxph(Surv(inage,outage, status==2)~comb+edustat, data=females)
+test.ph <- cox.zph(fit)
+#        chisq df      p
+#10.212  1 0.0014
+#edustat  0.619  1 0.4314 #edu fine here..
+#GLOBAL  10.330  2 0.0057
+
+out=survfit(Surv(inage, outage, status==2)~comb, data=females)
+kmplot(out, fun="cumhaz", lty=1) #higher curves overlap quite a bit. Kind of ok after age 43
+
+#MALES
+cox <- phreg(Surv(inage, outage, status==2)~gingi.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.226
+
+cox <- phreg(Surv(inage, outage, status==2)~dmft.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.138
+
+cox <- phreg(Surv(inage, outage, status==2)~edustat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.031 #so likely issue with proportionality here - however I do not see this reflected in plotted curves.
+
+cox <- phreg(Surv(inage, outage, status==2)~comb, data=males)
+gofcox <- gof(cox)
+summary(gofcox)#p = 0.133
+
+#Schoenfeld residuals
+fit <- coxph(Surv(inage,outage, status==2)~dmft.cat+gingi.cat+edustat, data=males)
+test.ph <- cox.zph(fit)
+#           chisq df     p
+#dmft.cat   0.451  1 0.502
+#gingi.cat  4.082  1 0.043
+#edustat    6.445  1 0.011
+#GLOBAL    11.303  3 0.010 # prop issue here, again I do not see this reflected in the plotted curves - could this be a matter of a very large sample size?
+ggcoxzph(test.ph) #all variables have all categories lying well within the SE lines, and follows the linear spline nicely
+
+out=survfit(Surv(inage, outage, status==2)~dmft.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) 
+#some slight overlapping of curves ending around age 38
+
+out=survfit(Surv(inage, outage, status==2)~gingi.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) # looks fine except perhaps from very first few years
+
+out=survfit(Surv(inage, outage, status==2)~edustat, data=males)
+kmplot(out, fun="cumhaz", lty=1) #good separation though some overlap before reaching 30. Given other tests consider using as strata.
+
+fit <- coxph(Surv(inage,outage, status==2)~comb+edustat, data=males)
+test.ph <- cox.zph(fit)
+#          chisq df     p
+#comb    0.608  1 0.436
+#edustat 6.421  1 0.011 #consider using strata/adjustment
+#GLOBAL  7.703  2 0.021
+
+out=survfit(Surv(inage, outage, status==2)~comb, data=males)
+kmplot(out, fun="cumhaz", lty=1) #overlap of curves 1 and 3 all the way through, hard to avoid. Overlap with curve 4 also at apx. age 42
+
+#Note: some uncertainty with edu variable, so to avoid potential ph-assumption violations use as strata (seeing as we don't need its info anyway). For gingi and dmft we do age restricted analyses. Consider doing age restricted analyses (before/after age 40 to match the average of examined variables)
+```
+
+#Age at disease, duration and severity  over time
+
+
+Notes from analyses: 
+- Try either grouping duration variables together OR do cut at e.g. age 40
+- Try grouping c-group 3-4 together (high-severe, similar to comb. variable)
+```{r}
+
+#Age at disease - grouped age at disease variables
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatdmft, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.825
+
+out=survfit(Surv(inage, outage, status==2)~ageatdmft, data=females)
+kmplot(out, fun="cumhaz", lty=1) #Curves overlap quite a bit, 0 and 1 in particular. could group.
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatgingi, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.693
+
+out=survfit(Surv(inage, outage, status==2)~ageatgingi, data=females)
+kmplot(out, fun="cumhaz", lty=1) #pretty good separation of curves, though a bit of overlap 1 and 2 age 38
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatdmft, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.427
+
+out=survfit(Surv(inage, outage, status==2)~ageatdmft, data=males)
+kmplot(out, fun="cumhaz", lty=1) #all three curves overlap quite a lot...
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatgingi, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.516
+
+out=survfit(Surv(inage, outage, status==2)~ageatgingi, data=males)
+kmplot(out, fun="cumhaz", lty=1) #Curves 1 and 2 quite bit of overlap. Consider grouping.
+
+#age at disease regrouped
+cox <- phreg(Surv(inage, outage, status==2)~ageatdmft, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.217
+
+out=survfit(Surv(inage, outage, status==2)~ageatdmft, data=females)
+kmplot(out, fun="cumhaz", lty=1) #Looks good, slight lap at 35, but minor
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatgingi, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 856
+
+out=survfit(Surv(inage, outage, status==2)~ageatgingi, data=females)
+kmplot(out, fun="cumhaz", lty=1) #pretty good separation of curves
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatdmft, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.739
+
+out=survfit(Surv(inage, outage, status==2)~ageatdmft, data=males)
+kmplot(out, fun="cumhaz", lty=1) #ok, some parts toucing, but better than previous
+
+cox <- phreg(Surv(inage, outage, status==2)~ageatgingi, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.146
+
+out=survfit(Surv(inage, outage, status==2)~ageatgingi, data=males)
+kmplot(out, fun="cumhaz", lty=1) #Curves 1 overlap apx. age 36, consider age restriction.
+
+#Duration of disease
+
+cox <- phreg(Surv(inage, outage, status==2)~caries_duration, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.296
+
+out=survfit(Surv(inage, outage, status==2)~caries_duration, data=females)
+kmplot(out, fun="cumhaz", lty=1) #some overlap group 1 and 2 ending around age 42
+
+cox <- phreg(Surv(inage, outage, status==2)~gingi_duration, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.602
+
+out=survfit(Surv(inage, outage, status==2)~gingi_duration, data=females)
+kmplot(out, fun="cumhaz", lty=1) #some overlap by group 1 ending around age 38 - due to low n?
+
+cox <- phreg(Surv(inage, outage, status==2)~caries_duration, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.805
+
+out=survfit(Surv(inage, outage, status==2)~caries_duration, data=males)
+kmplot(out, fun="cumhaz", lty=1) #some overlap group 1 and 2 ending around age 40
+
+cox <- phreg(Surv(inage, outage, status==2)~gingi_duration, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.99
+
+out=survfit(Surv(inage, outage, status==2)~gingi_duration, data=males)
+kmplot(out, fun="cumhaz", lty=1) #some overlap ending around age 35, may be due to low number of individuals in group 1?
+
+#Check of duration variables after regrouping (merge low and medium) - all looks much better!
+
+# Severity over time
+
+cox <- phreg(Surv(inage, outage, status==2)~cgroup, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.596
+
+out=survfit(Surv(inage, outage, status==2)~cgroup, data=females)
+kmplot(out, fun="cumhaz", lty=1) #group 3 quite some overlap with other curves (goes up and down) - may be due to low number of individuals. Consider merging with other groups?
+
+cox <- phreg(Surv(inage, outage, status==2)~cgroup, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.048
+
+out=survfit(Surv(inage, outage, status==2)~cgroup, data=males)
+kmplot(out, fun="cumhaz", lty=1) #Group 3 crosses over other cuves quite a bit untill age 40. Could consider merging 3 and 4 as quite similar over time/a lot of overlap
+
+
+cox <- phreg(Surv(inage, outage, status==2)~ggroup, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.084
+
+out=survfit(Surv(inage, outage, status==2)~ggroup, data=females)
+kmplot(out, fun="cumhaz", lty=1) #looks pretty good, some overlap of curves 0 and 1 untill age 38 apx.
+
+cox <- phreg(Surv(inage, outage, status==2)~ggroup, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.611
+
+out=survfit(Surv(inage, outage, status==2)~ggroup, data=males)
+kmplot(out, fun="cumhaz", lty=1) # looks fine overall.
+
+#Ggroup regrouped (low-moderate-high/severe)
+
+cox <- phreg(Surv(inage, outage, status==2)~cgroup, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.809
+
+out=survfit(Surv(inage, outage, status==2)~cgroup, data=females)
+kmplot(out, fun="cumhaz", lty=1) #some touchpoints but no actual overlap
+
+cox <- phreg(Surv(inage, outage, status==2)~cgroup, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.128
+
+out=survfit(Surv(inage, outage, status==2)~cgroup, data=males)
+kmplot(out, fun="cumhaz", lty=1) #cuves 1 and 2 overlapping quite a bit between ages 40 and 45
+```
+
+#Nice but not included
+
+## Edu time-varying
+
+```{r}
+load("E:/workdata/707957/ID-NN/Results/JoDR_df2.rdata")
+
+scor <- scor2
+
+males <- scor %>% 
+  filter(koen ==1)
+
+females <- scor %>% 
+  filter(koen ==2)
+
+
+#FEMALES 
+
+cox <- phreg(Surv(tstart, tstop, status==2)~gingi.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.212
+
+cox <- phreg(Surv(tstart, tstop, status==2)~dmft.cat, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0
+
+cox <- phreg(Surv(tstart, tstop, status==2)~edu, data=females)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.003 (time varying so makes sense)
+
+cox <- phreg(Surv(tstart, tstop, status==2)~comb, data=females)
+gofcox <- gof(cox)
+summary(gofcox)#p = 0
+
+
+#Schoenfeld residuals
+fit <- coxph(Surv(inage,outage, status==2)~dmft.cat+gingi.cat+strata(edu), data=females40)
+test.ph <- cox.zph(fit)
+
+#           chisq df      p
+#dmft.cat   8.952  1 0.0028 #issue here(also leading to global test problem, do time interaction)
+#gingi.cat  0.136  1 0.7124
+#edu        2.277  1 0.1313
+#GLOBAL    11.442  3 0.0096
+
+ggcoxzph(test.ph) #all looking fairly ok, no clear indication of interaction with time.
+
+
+out=survfit(Surv(tstart, tstop, status==2)~dmft.cat, data=females)
+kmplot(out, fun="cumhaz", lty=1) 
+#slight overlap at start of follow-up otherwise looks good
+
+out=survfit(Surv(tstart, tstop, status==2)~gingi.cat, data=females)
+kmplot(out, fun="cumhaz", lty=1) #overlap of curve for cat.3 at age 30-ish.
+
+out=survfit(Surv(tstart, tstop, status==2)~edu, data=females)
+kmplot(out, fun="cumhaz", lty=1) #looking fine
+
+fit <- coxph(Surv(tstart,tstop, status==2)~comb+edu, data=females)
+test.ph <- cox.zph(fit)
+#       chisq df     p
+#comb    6.51  1 0.011 #time interaction relevant here
+#edu     2.27  1 0.132 #strange that time-varying variable has PH?
+#GLOBAL  7.86  2 0.020
+
+out=survfit(Surv(tstart, tstop, status==2)~comb, data=females)
+kmplot(out, fun="cumhaz", lty=1) #many categories, rather chaotic curve, again, decent after age 40.
+
+#MALES
+
+cox <- phreg(Surv(tstart, tstop, status==2)~gingi.cat,data= males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.271
+
+cox <- phreg(Surv(tstart, tstop, status==2)~dmft.cat, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p = 0.125
+
+cox <- phreg(Surv(tstart, tstop, status==2)~edu, data=males)
+gofcox <- gof(cox)
+summary(gofcox) #p=0.024 (time varying so makes sense)
+
+cox <- phreg(Surv(tstart, tstop, status==2)~comb, data=males)
+gofcox <- gof(cox)
+summary(gofcox)#p = 0.125
+
+
+#Schoenfeld residuals
+fit <- coxph(Surv(tstart,tstop, status==2)~dmft.cat+gingi.cat+edu, data=males)
+test.ph <- cox.zph(fit)
+ #          chisq df      p
+#dmft.cat   0.321  1 0.5711
+#gingi.cat  3.998  1 0.0456 #issue here, strange that not reflected in other tests.
+#edu        7.088  1 0.0078#would expect since time-varying
+#GLOBAL    11.575  3 0.0090
+
+ggcoxzph(test.ph) #looking fine
+
+
+out=survfit(Surv(tstart, tstop, status==2)~dmft.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) 
+#some overlap beginning, ok after apx. y38
+
+out=survfit(Surv(tstart, tstop, status==2)~gingi.cat, data=males)
+kmplot(out, fun="cumhaz", lty=1) # some mingling early years, fine after age 30
+
+out=survfit(Surv(tstart, tstop, status==2)~edu, data=males)
+kmplot(out, fun="cumhaz", lty=1) #some overlap ending around y34.
+
+fit <- coxph(Surv(tstart,tstop, status==2)~comb+edu, data=males)
+test.ph <- cox.zph(fit)
+test.ph
+#          chisq df      p
+#comb   0.000588  1 0.9806
+#edu    7.128418  1 0.0076 #curious that it is not proportional here, do not think there was indication of this. Regardless, will likely do time restriction re check for females
+#GLOBAL 7.248513  2 0.0267
+
+out=survfit(Surv(tstart, tstop, status==2)~comb, data=males)
+kmplot(out, fun="cumhaz", lty=1) #again a lot of overlap of curves all the way through. 
+```

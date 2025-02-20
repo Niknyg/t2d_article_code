@@ -1,0 +1,454 @@
+---
+title: "t2d_setup"
+author: "NN"
+date: "2024-01-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(survival)
+```
+## Prepare data
+
+```{r }
+#load data
+load("E:/workdata/707957/_DataIn/R/Basic/t_scor_1972_1987.rdata")
+load("E:/workdata/707957/_DataIn/R/Basic/t_dodsaarsag_1.rdata")
+load("E:/workdata/707957/_DataIn/R/Basic/t_dodsaarsag_2.rdata")
+load("E:/workdata/707957/_DataIn/R/Basic/t_person.rdata")
+load("E:/workdata/707957/_DataIn/R/Basic/samlpop_707957.rdata")
+
+#Renaming pnr variable
+t_scor_1972_1987 <- rename(t_scor_1972_1987, pnr = cprnr)
+t_dodsaarsag_1 <- rename(t_dodsaarsag_1, pnr = k_cpr)
+t_dodsaarsag_2 <- rename(t_dodsaarsag_2, pnr = k_cpr)
+t_person <- rename(t_person, pnr = v_pnr)
+
+#Merging basic SCOR datasets
+scor <- left_join(t_scor_1972_1987, samlpop_707957, by="pnr") %>%
+  distinct() # Removing all duplicates
+
+#Creating variable for year of birth and year of visit
+scor$visit_year <- format(as.Date(scor$statusdato, format="%d/%m/%Y"),"%Y")
+scor$birth_year <- format(as.Date(scor$fodedto, format="%d/%m/%Y"),"%Y")
+
+
+#Calculating age at death
+scor <- left_join(scor, t_dodsaarsag_1, by="pnr") %>% left_join(., t_dodsaarsag_2, by = "pnr")
+require(lubridate)
+scor$age_at_death <-trunc((scor$fodedto %--%scor$D_DODSDTO)/years(1))
+
+#Calculating age at examination
+scor$ageatexam <-trunc((scor$fodedto %--%scor$statusdato)/years(1))
+
+#Create grouping into valid and invalid entries (dead before 1972, age at examination above 19 (N invalid entries=981)
+scor$validage[scor$ageatexam >= 0] <- "Valid"
+scor$validage[scor$ageatexam >= 19]<- "Invalid"
+scor$validage[scor$age_at_death <= 1] <- "Invalid"
+scor$validage[scor$currentage<34] <- "Invalid"
+
+#Removing invalid entries
+scor <- scor[(scor$validage =="Valid"),]
+
+#Recoding PATOLOGISKE_POCHER for 0/1 instead of NA/X
+scor$PATOLOGISKE_POCHER[scor$PATOLOGISKE_POCHER == "NA"] <- 0
+scor$PATOLOGISKE_POCHER[scor$PATOLOGISKE_POCHER == "X"] <- 1
+scor$perio <- as.numeric(scor$PATOLOGISKE_POCHER)
+
+#Make gingivitis index numeric
+scor$gingivitis <- as.numeric(scor$gingivitisindex)
+
+
+scor <- scor %>%
+  left_join(., t_person, by = "pnr") %>%  
+  filter(C_STATUS < 10 | C_STATUS >= 70) %>% #n=656092 when removing invalid CPR-numbers after filtering for birth years of interest.
+  select(pnr,
+         statusdato,
+         koen,
+         fodedto,
+         birth_year,
+         visit_year,
+         ageatexam,
+         gingivitis,
+         perio) %>%
+  filter(birth_year>=1963 & birth_year<=1972) #filter variables and birth years of interest n = #n= 657447
+
+
+rm(samlpop_707957, t_dodsaarsag_1, t_dodsaarsag_2, t_person)
+
+load("E:/workdata/707957/ID-NN/Results/dmf.rdata")
+load("E:/workdata/707957/ID-NN/Results/status.rdata")
+
+#Load, status, and dmf files
+scor <- scor %>%
+  inner_join(., dmf, by=c("pnr", "statusdato")) %>%
+  inner_join(., dfstat, by = "pnr") #656092 individuals
+
+#inage/outage calculation
+
+scor$status[scor$outdate >"2018-12-31"] <- "0" #If event is after end of follow-up in 2018 set outdate to end of follow-up and status to 0
+scor$outdate[scor$outdate >"2018-12-31"] <- "2018-12-31"
+
+scor <- scor %>%
+  mutate(fodedto = as.Date(fodedto, format = "%Y/%m/%d")) %>%
+  mutate(outdate = as.Date(outdate, format = "%Y/%m/%d")) #just to make sure all ages calculate on the same basis.
+
+require(lubridate)
+scor$outage <-((scor$fodedto %--%scor$outdate)/years(1)) #Calculating age at event/censoring
+
+sof <- as.Date("1995-01-01") #Making start of follow-up date - baseline 1995
+scor$indate <- sof
+ 
+scor$inage <-((scor$fodedto %--%scor$indate)/years(1)) #Calculating age at start of follow-up in 1995
+
+subset <- scor %>%
+  filter(inage <25) %>%
+  mutate(inage = 25) #filter for individuals young than 25 in 1995, set start of follow-up to age 25 for these
+
+scor <- scor %>%
+  filter(inage >=25) %>%
+  rbind(., subset) #merge with subset. Total number of individuals in dataset 650,092
+  
+scor <- scor %>%
+  filter(outdate >= "1995-01-01" & outage >=25) #Filter to remove individuals who have event or are censored before beginning of follow-up on the first of January 1995 OR before age 25, n=635,031/ 21,061 individuals removed ,
+
+dif <- scor %>% filter(outage < inage) #removing those who have event before enrollment/age 25 (none are filtered out, good).
+
+#Time on study variable for descriptive stats
+scor$tos <- scor$outage-scor$inage
+
+#Making binary and categorical variables for gingivitis and DMFT
+scor <- scor %>%
+    mutate(gingi.bi = ifelse(gingivitis > 0, 1, 0),
+          dmft.bi = ifelse(dmft > 0, 1, 0))
+
+#Categorical gingi and dmft - updated categorisation based on model checks
+
+scor$gingi.cat[scor$gingivitis >= 0 & scor$gingivitis <=4] <- 0
+scor$gingi.cat[scor$gingivitis >= 5 & scor$gingivitis <=8] <- 1
+scor$gingi.cat[scor$gingivitis >=9 & scor$gingivitis <=12] <- 2
+ 
+
+scor$dmft.cat[scor$dmft >= 0 & scor$dmft <=4] <- 0
+scor$dmft.cat[scor$dmft >= 5 & scor$dmft <=12] <- 1
+scor$dmft.cat[scor$dmft >=13 & scor$dmft <=16] <- 2
+scor$dmft.cat[scor$dmft >=17] <- 3
+
+#Making combined caries-gingi variable
+ 
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 0] <- 0
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 1] <- 1
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 2] <- 2
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 0] <- 3
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 1] <- 4
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 2] <- 5
+scor$comb[scor$dmft.cat == 2 & scor$gingi.cat == 0] <- 6
+scor$comb[scor$dmft.cat == 2 & scor$gingi.cat == 1] <- 7
+scor$comb[scor$dmft.cat == 2 & scor$gingi.cat == 2] <- 8
+scor$comb[scor$dmft.cat == 3 & scor$gingi.cat == 0] <- 9
+scor$comb[scor$dmft.cat == 3 & scor$gingi.cat == 1] <- 10
+scor$comb[scor$dmft.cat == 3 & scor$gingi.cat == 2] <- 11
+
+
+save(scor, file="E:\\workdata\\707957\\ID-NN\\Results\\t2d_df.rdata")
+```
+
+#Severity over time dataset prep
+
+```{r}
+
+load("E:/workdata/707957/ID-NN/Results/t2d_df.rdata")
+
+#Below age 6
+df1 <- scor %>%
+  select(pnr,
+         dmft,
+         gingivitis,
+         ageatexam) %>%
+  filter(ageatexam <=5.999)
+
+df <- df1 %>%
+  select(!gingivitis) %>%
+  group_by(pnr) %>%
+  slice(which.max(dmft))
+  
+df1 <- df1 %>%
+  select(pnr, gingivitis) %>%
+  group_by(pnr) %>%
+  slice(which.max(gingivitis)) %>%
+   left_join(., df,  by="pnr") %>%
+  rename(caries1 = dmft,
+         gingi1 = gingivitis)
+  
+#Age 6 to 12
+df2 <- scor %>%
+  select(pnr,
+         dmft,
+         gingivitis,
+         ageatexam) %>%
+  filter(ageatexam >=6.000 & ageatexam <= 11.999)
+
+df <- df2 %>%
+  select(!gingivitis) %>%
+  group_by(pnr) %>%
+  slice(which.max(dmft))
+  
+df2 <- df2 %>%
+  select(pnr, gingivitis) %>%
+  group_by(pnr) %>%
+  slice(which.max(gingivitis)) %>%
+   left_join(., df,  by="pnr") %>%
+    rename(caries2 = dmft,
+         gingi2 = gingivitis)
+
+#Age 12 and up
+df3 <- scor %>%
+  select(pnr,
+         dmft,
+         gingivitis,
+         ageatexam) %>%
+  filter(ageatexam >=12.000)
+
+df <- df3 %>%
+  select(!gingivitis) %>%
+  group_by(pnr) %>%
+  slice(which.max(dmft))
+  
+df3 <- df3 %>%
+  select(pnr, gingivitis) %>%
+  group_by(pnr) %>%
+  slice(which.max(gingivitis)) %>%
+   left_join(., df,  by="pnr") %>%
+    rename(caries3 = dmft,
+         gingi3 = gingivitis)
+
+df <- full_join(df1, df2, by ="pnr") %>%
+  full_join(., df3, by = "pnr") %>%
+  select(!c(ageatexam.x, ageatexam.y, ageatexam))
+
+df <- df %>% na.omit()
+
+df <- df %>%
+  group_by(pnr) %>%
+  mutate(cariesload = sum(caries1+caries2+caries3),
+         gingiload = sum(gingi1+gingi2+gingi3),
+         caries_time1 = ifelse(caries1 > 0, 1, 0),
+         caries_time2 = ifelse(caries2 > 0, 1, 0),
+         caries_time3 = ifelse(caries3 > 0, 1, 0),
+         gingi_time1 = ifelse(gingi1 > 0, 1, 0),
+         gingi_time2 = ifelse(gingi2 > 0, 1, 0),
+         gingi_time3 = ifelse(gingi3 > 0, 1, 0),
+         caries_duration = sum(caries_time1+caries_time2+caries_time3),
+         gingi_duration = sum(gingi_time1+gingi_time2+gingi_time3))
+
+#Grouping gingi duration
+
+df$gingi_duration[df$gingi_duration <=1] <- 0
+df$gingi_duration[df$gingi_duration ==2] <- 1
+df$gingi_duration[df$gingi_duration ==3] <- 2
+
+df$caries_duration[df$caries_duration <=1] <- 0
+df$caries_duration[df$caries_duration ==2] <- 1
+df$caries_duration[df$caries_duration ==3] <- 2
+
+#grouping gingiload: Aim: which group an individuals belongs to determined by highest score at any one visit being within the boundaries of the original GS grouping so:
+#Group 0 -> no total score higher than 12 (i.e. 3*4), no single score greater than 4. Group 1 -> total score greater than 5 (meaning no single score less than 4 or greater than 8 (so at least one score of a moderate severity needed).
+#Group 3 -> At least one registration of 9 (i.e. registration of high level of gingivitis at all registrations needed).
+
+df$ggroup[df$gingi1 <= 4  & df$gingi2 <= 4 & df$gingi3 <= 4] <- 0
+df$ggroup[df$gingi1 >=5 & df$gingi1 <=8 | df$gingi2 >=5 & df$gingi2 <=8 | df$gingi3 >=5 & df$gingi3 <=8] <- 1
+df$ggroup[df$gingiload >=9 & df$gingi1 >=9|df$gingi2 >=9|df$gingi3 >=9] <- 2
+#distribution reflects the normal gingi.cat variable well (stratified on male and female).
+
+
+#grouping cariesload. Like with gingivitis above aim to group individuals by the upper and lower limits of their registrations. Group 0: No single registration higher than 4. Group 1: No single registration greater than 16, BUT total cariesload no greater than 24, meaning that an individual can't have more no more than
+
+
+df$cgroup[df$caries1 <=4  & df$caries2 <=4 & df$caries3 <=4] <- 0
+df$cgroup[df$caries1 >=5 & df$caries1 <= 12 |df$caries2 >=5 & df$caries2 <= 12 | df$caries3 >=5 & df$caries3 <= 12] <- 1
+df$cgroup[df$caries1 >= 13 |df$caries2 >= 13 |df$caries2 >= 13] <- 2
+#df$cgroup[df$cariesload >=36] <- 3
+#distribution seems to fit pretty well with dmft.cat variable
+
+save(df, file="E:\\workdata\\707957\\ID-NN\\Results\\timevary.rdata")
+
+rm(df, df1, df2, df3)
+```
+## Set-up for analyses with highest achieved level of education between ages 25-30
+
+```{r}
+
+load("E:/workdata/707957/ID-NN/Results/t2d_df.rdata")
+load("E:/workdata/707957/ID-NN/Results/status.rdata")
+
+scor <- scor %>%
+  select(!c(status, outdate)) %>%
+  left_join(., dfstat, by ="pnr")
+
+#Select on highest ever registered level of gingivitis
+gingi <- scor %>%
+  select(pnr, gingivitis, gingi.cat, gingi.bi, ageatexam) %>%
+  group_by(pnr) %>%
+  slice(which.max(gingivitis)) %>%
+  rename(ageatgingi = ageatexam)
+
+#Select on highest registered dmft and join with gingi
+scor <- scor %>%
+  select(!c(gingivitis, gingi.cat, gingi.bi)) %>%
+  rename(ageatdmft = ageatexam) %>%
+  group_by(pnr) %>%
+  slice(which.max(dmft)) %>%
+  left_join(., gingi,  by="pnr")
+
+#636,231 individuals in dataset
+rm(gingi, dfstat)
+
+load("E:/workdata/707957/ID-NN/Results/full_edu.rdata")
+
+edu <- edu %>%
+  select(pnr, edustat, eduage) %>%
+  filter(eduage >= 25 & eduage <=30) %>% #select for education level between ages 25 and 30
+  group_by(pnr) %>%
+  slice(which.max(edustat))
+
+#merge with SCOR data
+test <- left_join(scor, edu, by = "pnr")
+
+scor <- test %>%
+  subset(!(is.na(edustat)))
+
+dif <- subset(test, !pnr %in% scor$pnr) #7273 individuals removed due to missing edu.Total n=627,758.
+
+subset <- scor %>%
+  filter(inage == outage) %>%
+  mutate(outage = outage+0.001)
+scor <- scor %>%
+  filter(inage < outage) %>%
+  rbind(., subset) #for the 31 individuals who both enter and exit follow-up on 01-01-1995 add 0.0001 to avoid issue with inage and outage being identical.
+
+save(scor, file="E:\\workdata\\707957\\ID-NN\\Results\\t2d_df1.rdata")
+save(dif, file="E:\\workdata\\707957\\ID-NN\\Results\\leftout.rdata")
+
+```
+
+#Set-up for analysis of subset
+
+```{r}
+load("E:/workdata/707957/ID-NN/Results/timevary.rdata")
+load("E:/workdata/707957/ID-NN/Results/t2d_df1.rdata")
+
+scor <- scor %>%
+  inner_join(., df, by="pnr") %>%
+    select(pnr,
+           koen,
+           ageatgingi,
+           ageatdmft,
+           inage,
+           outage,
+           status,
+           edustat,
+           gingiload,
+           cariesload,
+           caries_duration,
+           gingi_duration,
+           ageatgingi,
+           ageatdmft,
+           cgroup,
+           ggroup,
+           dmft.cat,
+           gingi.cat,
+           birth_year)
+
+
+#Grouping age at dmft and gingi based on variable assessment.
+
+#scor$ageatdmft[scor$ageatdmft <=6] <- 0
+#scor$ageatdmft[scor$ageatdmft >=6 & scor$ageatdmft <12] <- 1
+scor$ageatdmft[scor$ageatdmft <12] <- 0
+scor$ageatdmft[scor$ageatdmft >=12] <- 1
+
+
+#scor$ageatgingi[scor$ageatgingi <=6] <- 0
+#scor$ageatgingi[scor$ageatgingi >=6 & scor$ageatgingi <12] <- 1
+scor$ageatgingi[scor$ageatgingi <12] <- 0
+scor$ageatgingi[scor$ageatgingi >=12] <- 1
+
+#Grouping age at dmft and gingi based on variable assesment
+
+#scor$gingi_duration[scor$gingi_duration <=1] <- 0
+scor$gingi_duration[scor$gingi_duration <2] <- 0
+scor$gingi_duration[scor$gingi_duration ==2] <- 1
+
+#scor$caries_duration[scor$caries_duration <=1] <- 0
+scor$caries_duration[scor$caries_duration <2] <- 0
+scor$caries_duration[scor$caries_duration ==2] <- 1
+
+rm(df)
+```
+
+#Alternative comb variable
+
+```{r}
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat == 0] <- 0
+scor$comb[scor$dmft.cat == 0 & scor$gingi.cat >= 1] <- 1
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat == 0] <- 2
+scor$comb[scor$dmft.cat == 1 & scor$gingi.cat >= 1] <- 3
+scor$comb[scor$dmft.cat >= 2 & scor$gingi.cat == 0] <- 4
+scor$comb[scor$dmft.cat >= 2 & scor$gingi.cat >= 1] <- 5
+ 
+```
+#Tested but not included
+
+## Set-up for analyses with edu as time-varying variable
+
+```{r}
+
+load("E:/workdata/707957/ID-NN/Results/t2d_df.rdata")
+
+#Select on highest ever registered level of gingivitis
+gingi <- scor %>%
+  select(pnr, gingivitis, ageatexam) %>%
+  group_by(pnr) %>%
+  slice(which.max(gingivitis)) %>%
+  rename(ageatgingi = ageatexam)
+
+#Select on highest registered dmft and join with gingi
+scor <- scor %>%
+  select(!c(gingivitis)) %>%
+  rename(ageatdmft = ageatexam) %>%
+  group_by(pnr) %>%
+  slice(which.max(dmft)) %>%
+  left_join(., gingi,  by="pnr")
+
+#Using tmerge for time varying covariate Edu
+
+load("E:/workdata/707957/ID-NN/Results/full_edu.rdata")
+
+edu20 <- edu %>%
+  select(pnr, edustat, eduage) %>%
+  filter(eduage >= 18 & eduage <= 22) %>% #select for education level for age 20
+  group_by(pnr) %>%
+  slice(which.max(edustat))
+
+test <- edu %>%
+  select(pnr, edustat, eduage) %>%
+  filter(eduage > 22 & eduage <= 30) %>% #select for education level between ages 20 and 30
+  group_by(pnr) %>%
+  slice(which.max(edustat)) %>%
+  rbind(., edu20) %>%
+  mutate(eduage = if_else(eduage > 22, 30, 22))
+
+
+df1 <- tmerge(scor, scor, id=pnr,  tstart=inage, tstop=outage, status=event(outage, status)) #set range
+scor_temp <- tmerge(df1, test, id=pnr, edu = tdc(eduage, edustat))#add time varying variable for education
+
+scor2 <- scor_temp %>%
+  group_by(pnr) %>%
+  subset(!(is.na(edu)))
+
+dif2 <- subset(scor_temp, !pnr %in% scor2$pnr) #Filtering out those removed from primary dataset for comparative analysis. 4532 individuals removed due to missing info on education, 631,699 individuals left in datastet.Difference between the two approaches to edu = 68 observations/individuals, no T2D cases. Removed due to missing education at age 20.
+
+
+save(scor2, file="E:\\workdata\\707957\\ID-NN\\Results\\t2d_df2.rdata")
+save(dif2, file="E:\\workdata\\707957\\ID-NN\\Results\\leftout2.rdata")

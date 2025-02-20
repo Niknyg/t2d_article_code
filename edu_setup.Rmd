@@ -1,0 +1,143 @@
+---
+title: "Load and join SES variables"
+author: "NN"
+date: "`r Sys.Date()`"
+output: html_document
+---
+###For variable descriptions and code meanings for all variables see DST website
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+##Udda - Education (highest level fullfilled)
+
+```{r}
+
+#Loading all data files under uddaYEAR.rdata
+
+data_files <-  fs::dir_ls(here::here("E:\\workdata\\707957\\_DataIn\\R\\SES\\"),
+                          regexp = "udda",
+                          recurse = TRUE)
+lapply(data_files,load,.GlobalEnv)
+
+
+#Renaming of data
+edu1981 <- rename(udda198112, edu1981 = hfaudd)
+edu1982 <- rename(udda198212, edu1982 = hfaudd)
+edu1983 <- rename(udda198312, edu1983 = hfaudd)
+edu1984 <- rename(udda198412, edu1984 = hfaudd)
+edu1985 <- rename(udda198512, edu1985 = hfaudd)
+edu1986 <- rename(udda198612, edu1986 = hfaudd)
+edu1987 <- rename(udda198712, edu1987 = hfaudd)
+edu1988 <- rename(udda198812, edu1988 = hfaudd)
+edu1989 <- rename(udda198912, edu1989 = hfaudd)
+edu1990 <- rename(udda199012, edu1990 = hfaudd)
+edu1991 <- rename(udda199112, edu1991 = hfaudd)
+edu1992 <- rename(udda199212, edu1992 = hfaudd)
+edu1993 <- rename(udda199312, edu1993 = hfaudd)
+edu1994 <- rename(udda199412, edu1994 = hfaudd)
+edu1995 <- rename(udda199512, edu1995 = hfaudd)
+edu1996 <- rename(udda199612, edu1996 = hfaudd)
+edu1997 <- rename(udda199712, edu1997 = hfaudd)
+edu1998 <- rename(udda199812, edu1998 = hfaudd)
+edu1999 <- rename(udda199912, edu1999 = hfaudd)
+edu2000 <- rename(udda200012, edu2000 = hfaudd)
+edu2001 <- rename(udda200112, edu2001 = hfaudd)
+edu2002 <- rename(udda200212, edu2002 = hfaudd)
+edu2003 <- rename(udda200312, edu2003 = hfaudd)
+edu2004 <- rename(udda200412, edu2004 = hfaudd)
+edu2005 <- rename(udda200512, edu2005 = hfaudd)
+edu2006 <- rename(udda200612, edu2006 = hfaudd)
+edu2007 <- rename(udda200712, edu2007 = hfaudd)
+edu2008 <- rename(udda200809, edu2008 = hfaudd)
+edu2009 <- rename(udda200909, edu2009 = hfaudd)
+edu2010 <- rename(udda201009, edu2010 = hfaudd)
+edu2011 <- rename(udda201109, edu2011 = hfaudd)
+edu2012 <- rename(udda201209, edu2012 = hfaudd)
+edu2013 <- rename(udda201309, edu2013 = hfaudd)
+edu2014 <- rename(udda201409, edu2014 = hfaudd)
+edu2015 <- rename(udda201509, edu2015 = hfaudd)
+edu2016 <- rename(udda201609, edu2016 = hfaudd)
+
+#Combine all bef files into master file
+edu <- left_join(edu1981, edu1982, by = "pnr") %>% 
+  left_join(., edu1983, by = "pnr")
+  left_join(., edu1984, by = "pnr")
+  left_join(., edu1985, by = "pnr")
+  left_join(., edu1986, by = "pnr")
+  left_join(., edu1987, by = "pnr")
+  left_join(., edu1988, by = "pnr") %>%
+  left_join(., edu1989, by = "pnr") %>% 
+  left_join(., edu1990, by = "pnr") %>% 
+  left_join(., edu1991, by = "pnr") %>% 
+  left_join(., edu1992, by = "pnr") %>% 
+  left_join(., edu1993, by = "pnr") %>% 
+  left_join(., edu1994, by = "pnr") %>%
+  left_join(., edu1995, by = "pnr") %>%
+  left_join(., edu1996, by = "pnr") %>%
+  left_join(., edu1997, by = "pnr") %>%
+  left_join(., edu1998, by = "pnr") %>%
+  left_join(., edu1999, by = "pnr") %>%
+  left_join(., edu2000, by = "pnr") %>%
+  left_join(., edu2001, by = "pnr") %>%
+  left_join(., edu2002, by = "pnr") %>%
+  left_join(., edu2003, by = "pnr") %>%
+  left_join(., edu2004, by = "pnr") %>%
+  left_join(., edu2005, by = "pnr") %>%
+  left_join(., edu2006, by = "pnr") %>%
+  left_join(., edu2007, by = "pnr") %>%
+  left_join(., edu2008, by = "pnr") %>%
+  left_join(., edu2009, by = "pnr") %>%
+  left_join(., edu2010, by = "pnr") %>%
+  left_join(., edu2011, by = "pnr") %>%
+  left_join(., edu2012, by = "pnr") %>%
+  left_join(., edu2013, by = "pnr") %>%
+  left_join(., edu2014, by = "pnr") %>%
+  left_join(., edu2015, by = "pnr") %>%
+  left_join(., edu2016, by = "pnr")
+
+
+#wrangling
+colnames(edu) <- gsub("edu", "", colnames(edu))
+
+edu <- pivot_longer(
+  edu,
+  !pnr,
+  names_to = "year",
+  values_to = "edustat")
+
+edu$year <- as.numeric(edu$year)
+
+
+edu <- edu %>%
+  filter(year <= 2007) %>% 
+  ISOdate(edu$year, 12, 1)
+
+edu <- edu %>% 
+filter(year > 2007) %>% 
+ISOdate(edu$year, 09, 1)
+  
+edu$year <- as.Date(edu$year)
+
+#Recoding education into three levels (short, medium and higher)
+edu$edustat[edu$edustat >= 1 & edu$edustat <= 210 | edu$edustat >= 1000 & edu$edustat <= 1032 | edu$edustat >= 1500 & edu$edustat <= 1599 | edu$edustat >= 1106 & edu$edustat <= 1123 | edu$edustat >= 1208 & edu$edustat <= 1459| edu$edustat >= 1721 & edu$edustat <= 1723] <- 1
+
+
+edu$edustat[edu$edustat >= 2000 & edu$edustat <= 2099 | edu$edustat >= 2200 & edu$edustat <= 2299 |edu$edustat >= 2500 & edu$edustat <= 2599 | edu$edustat >= 3226 & edu$edustat <= 3267 |  edu$edustat >= 3292 & edu$edustat <= 3303| edu$edustat >= 3500 & edu$edustat <= 3599 | edu$edustat >= 3900 & edu$edustat <= 3999 | edu$edustat >=215 & edu$edustat <=300 | edu$edustat == 850 | edu$edustat >= 1069 & edu$edustat <= 1098 | edu$edustat >= 1145 & edu$edustat <= 1207| edu$edustat >= 1651 & edu$edustat <= 1689 | edu$edustat >= 1893 & edu$edustat <= 2495| edu$edustat >= 4101 & edu$edustat <= 4999 | edu$edustat >= 5090 & edu$edustat <= 5092 |  edu$edustat >= 5097 & edu$edustat <= 5098 | edu$edustat >= 5146 & edu$edustat <= 5149 |edu$edustat == 5152 |edu$edustat == 5155] <- 2
+
+edu$edustat[ edu$edustat >= 3000 & edu$edustat <= 3225 | edu$edustat >= 3273 & edu$edustat <= 3290 | edu$edustat >= 4000 & edu$edustat <= 4099 |edu$edustat >= 5000 & edu$edustat <= 5089 |  edu$edustat >= 5093 & edu$edustat <= 5096| edu$edustat >= 5100 & edu$edustat <= 5145 | edu$edustat >= 6000 & edu$edustat <= 6099 | edu$edustat >= 6500 & edu$edustat <= 6599|edu$edustat >= 7000 & edu$edustat <= 7099 | edu$edustat >=320 & edu$edustat <850 | edu$edustat >= 1069 & edu$edustat <= 3225 |edu$edustat >= 3304 & edu$edustat <= 3875 |edu$edustat == 5151 | edu$edustat >= 5153 & edu$edustat <= 5154 | edu$edustat >= 5156 & edu$edustat <= 8999 |edu$edustat >=9000] <- 3
+
+
+#Calculating age in a given year of education status
+t_person <- t_person %>% 
+  rename(pnr =v_pnr,
+         birth_year = D_FODDATO)
+
+edu <- left_join(edu, t_person, by="pnr")
+
+require(lubridate)
+edu$eduage <-trunc((edu$birth_year %--%edu$year)/years(1))
+
+#Save data file
+save(edu, file="E:\\workdata\\707957\\Results\\data\\full_edu.rdata")
+```

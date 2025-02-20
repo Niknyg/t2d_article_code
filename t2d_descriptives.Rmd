@@ -1,0 +1,268 @@
+---
+title: "t2d_descriptives"
+author: "NN"
+date: "2024-01-08"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+load("E:/workdata/707957/ID-NN/Results/t2d_df.rdata")
+load("E:/workdata/707957/ID-NN/Results/t2d_df1.rdata")
+
+scor <- scor %>% 
+  mutate(status=ifelse(status == "2", 1 ,0))
+
+males <- scor %>% filter(koen==1)
+
+females <- scor %>% filter(koen==2)
+```
+
+## Females 
+
+```{r}
+#ALL
+
+janitor::tabyl(females$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(females$outage)
+sd(females$outage)
+
+mean(females$tos)
+sd(females$tos)
+
+janitor::tabyl(females$dmft.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$dmft.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(females$dmft)
+sd(females$dmft)
+
+mean(females$gingivitis)
+sd(females$gingivitis)
+
+janitor::tabyl(females$gingi.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$gingi.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$edustat) %>% janitor::adorn_pct_formatting(digits=2)
+
+#ONLY T2D
+females <- females %>% filter(status==1)
+
+janitor::tabyl(females$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+mean(females$outage)
+sd(females$outage)
+
+mean(females$tos)
+sd(females$tos)
+janitor::tabyl(females$dmft.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$dmft.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(females$dmft)
+sd(females$dmft)
+
+mean(females$gingivitis)
+sd(females$gingivitis)
+
+janitor::tabyl(females$gingi.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$gingi.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$edustat) %>% janitor::adorn_pct_formatting(digits=2)
+````
+#Subset analyses females
+```{r}
+
+females <- scor %>% filter(koen==2)
+
+janitor::tabyl(females$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(females$ageatdmft)
+sd(females$ageatdmft)
+janitor::tabyl(females$ageatdmft) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$caries_duration) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$cgroup) %>% janitor::adorn_pct_formatting(digits=2)
+#females$cgroup     n percent valid_percent
+
+mean(females$ageatgingi)
+sd(females$ageatgingi)
+janitor::tabyl(females$ageatgingi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$gingi_duration) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$ggroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+#ONLY T2D
+females <- females %>% filter(status==1)
+
+janitor::tabyl(females$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+mean(females$ageatdmft)
+sd(females$ageatdmft)
+janitor::tabyl(females$ageatdmft) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$caries_duration) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$cgroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(females$ageatgingi)
+sd(females$ageatgingi)
+janitor::tabyl(females$ageatgingi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$gingi_duration) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(females$ggroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+```
+
+## Males 
+
+```{r}
+#ALL
+
+janitor::tabyl(males$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(males$outage)
+sd(males$outage)
+
+mean(males$tos)
+sd(males$tos)
+
+janitor::tabyl(males$dmft.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$dmft.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+mean(males$dmft)
+sd(males$dmft)
+
+mean(males$gingivitis)
+sd(males$gingivitis)
+
+janitor::tabyl(males$gingi.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$gingi.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$edustat) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+#ONLY T2D
+males <- males %>% filter(status==1)
+
+janitor::tabyl(males$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+mean(males$outage)
+sd(males$outage)
+
+mean(males$tos)
+sd(males$tos)
+
+janitor::tabyl(males$dmft.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$dmft.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(males$dmft)
+sd(males$dmft)
+
+mean(males$gingivitis)
+sd(males$gingivitis)
+
+janitor::tabyl(males$gingi.bi) %>% janitor::adorn_pct_formatting(digits=2)
+janitor::tabyl(males$gingi.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$edustat) %>% janitor::adorn_pct_formatting(digits=2)
+```
+
+#Subset Males
+
+```{r}
+
+males <- scor %>% filter(koen==1)
+
+janitor::tabyl(males$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(males$ageatdmft)
+sd(males$ageatdmft)
+janitor::tabyl(males$ageatdmft) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$caries_duration) %>% janitor::adorn_pct_formatting(digits=2)
+janitor::tabyl(males$cgroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(males$ageatgingi)
+sd(males$ageatgingi)
+janitor::tabyl(males$ageatgingi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$gingi_duration) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$ggroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+#ONLY T2D
+males <- males %>% filter(status==1)
+
+janitor::tabyl(males$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+mean(males$ageatdmft)
+sd(males$ageatdmft)
+
+janitor::tabyl(males$ageatdmft) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$caries_duration) %>% janitor::adorn_pct_formatting(digits=2)
+janitor::tabyl(males$cgroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(males$ageatgingi)
+sd(males$ageatgingi)
+janitor::tabyl(males$ageatgingi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$gingi_duration) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(males$ggroup) %>% janitor::adorn_pct_formatting(digits=2)
+
+
+```
+
+#Characterising group removed due to missing edu
+
+```{r}
+
+load("E:/workdata/707957/ID-NN/Results/leftout.rdata")
+
+dif <- dif %>% 
+  mutate(status=ifelse(status == "2", 1 ,0))
+
+janitor::tabyl(dif$koen) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(dif$status) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(dif$outage)
+sd(dif$outage)
+
+mean(dif$tos)
+sd(dif$tos)
+
+janitor::tabyl(dif$dmft.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(dif$dmft.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+mean(dif$dmft)
+sd(dif$dmft)
+
+mean(dif$gingivitis)
+sd(dif$gingivitis)
+
+janitor::tabyl(dif$gingi.bi) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(dif$gingi.cat) %>% janitor::adorn_pct_formatting(digits=2)
+
+janitor::tabyl(dif$edustat) %>% janitor::adorn_pct_formatting(digits=2)
+#None
+```
